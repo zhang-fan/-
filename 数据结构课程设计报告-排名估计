@@ -1,0 +1,443 @@
+一、选题
+  1、所选题目
+      题目五：排名估计
+  2、选题内容
+  (1)问题描述
+      某次考试有n个选手参加，知情人泄露了若干组排序信息，每组信息包括两个人的排中情况，如A>B AB或者A-B.分别表示A在B之前，A在B之后，A和B排名相等。你的任务是尽量求出完整的排序表。
+  (2)设计要求
+      要求一:选手测试数据请自行构造，存储在文本文件中。
+      要求二:一个测试数据文件可以有多个测试用例。
+      要求三:需要包含三种测试用例，一是数据不矛盾，但无法完整排
+      序:二是数据可以完整排序;三是数据有矛盾，如A>B、B>C、 C>A,无法排序。
+      要求四:选手姓名用逗号分隔，每个姓名可以很长;采用哈希表索引选手。(可选)
+      相关数据结构和算法:
+      并查集、图、邻接表、拓扑排序、哈希表。
+
+二、实现分析
+  1.题目分析与设计方案
+    针对题目要求，鉴于c++语言高效的运行速度及强大的标准模板库STL，我们小组选用c++语言进行本次课程设计。
+    题目要求我们将按照题目要求所自行制定的测试数据存入文本文件（TXT文件）中，文本中有三类数据信息：A>B（A排名在B之前），A<B（A排名在B之后），A-B（A与B排名相等），文本中每组数据储存为一行。
+整体的解答思路就是首先将数据从TXT文本读入内存中，先使用并查集将相等的数据合并为一个集合，选择一个节点为该集合的代表节点，后续对该集合中所有节点的操作都将转移到代表节点上，集合中除代表节点外，其余节点均不再参与后续的构图等过程，只需在输出结果时插入到代表节点的前面。
+然后构造哈希表和有向图，哈希表采用数据项字符串的ASCII码相加然后对哈希表的最大存储空间取模，采用线性探测解决哈希冲突。图使用邻接表存储，图中节点使用哈希表作为索引。
+然后对有向图进行拓扑排序，当图有环的时候证明数据是矛盾的，就是出现了A>B, B>C,C>A的情况，这种情况构图是有环的，拓扑排序完整与否可以判断是否有环。当拓扑排序时同时有两个节点入度为0就是无法排序的情况，也就是A>C, B>C,A和B的关系没有给出所以无法确定A和B的关系，A和B就无法排序，排除这两种情况，拓扑排序的结果就是最终排序答案
+  2.输入输出说明
+  输入:
+    程序从工程文件中直接读取预置的TXT文本作为程序输入，我们小组一共预置了三种测试数据，包括可以完整排序样例1(无排名相等)、可以完整排序样例2(有排名相等)、数据不矛盾但无法完整排序、数据有矛盾无法排序共四组测试样例，测试样例不可增加，但可以在四组样例中修改测试数据。
+  输出：
+    程序使用控制台界面进行结果输出，使用win32函数封装了易操作、结果清晰的用户交互界面，为了避免个别姓名过长或过短造成输出的冗余和获得更加的直观的程序结果，我们规定测试样例中不同两个姓名的首字母不能相同，并在输出时用首字母代替姓名，程序输出有三种结果，分别对应三种测试样例：
+    (1)	可以排序：输出完整的排序情况
+    (2)	数据不矛盾但无法排序：输出数据在哪个节点之后出现了无法排序的情况
+    (3)	数据矛盾：输出数据在哪个节点之后出现了矛盾
+  3.数据结构使用分析
+    程序中主要运用了：并查集、哈希表、图、队列、线性表等数据结构。
+    并查集使用数组（ufs[]）表示，如果节点没有相等节点，则ufs[i] = i， 即它的代表节点就是它本身，如图2.1中，ufs[4] = 4。如果节点有相等节点，则所有相等节点组成一个集合，若a = b = c，a为其代表节点，则有ufs[c] = ufs[b] = ufs[a] = a， 如图2.1中， 节点1 = 节点3 = 节点8, 节点1为其代表节点，则有ufs[8] = ufs[3] = ufs[1] = 1，这样当我们索引节点8时，得到的是其代表节点：节点1，对节点8的所有操作都将在节点1进行。
+ 
+                                                      图2.1 并查集关系
+    哈希表节点HashNode包含两项属性：节点存储的姓名string name和当前节点的状态enum EntryType Info， 状态值是一个枚举类型：
+    enum EntryType { Legitimate, Empty, Deleted };
+    分别代表当前节点的状态：已存放数值、空节点、节点已删除哈希表数据结构HashTable包含两项属性：已经存入的数据大小TableSize和哈希节点数组指针HashNode *Cells。
+    哈希表提供了三个访问接口，分别为：
+      int hash_func(string name);//哈希函数，返回应插入下标,以姓名的ASCII码总和作为哈希索引
+      int hash_insert(HashTable& tab, string name); //哈希表插入，采用线性探测,返回插入位置的下标
+      int hash_find(HashTable& tab, string name);//哈希查找，返回查找元素下标
+ 
+                                                        图2.2 哈希表结构
+    有向图节点Tunode包含四项属性：节点数据name、入度indegree、出度outdegree、节点状态state，state是一个枚举类型：
+      enum State { Hang, Using, DataContra };
+      /* 节点属性里增加的一个状态：（挂起、使用中, 矛盾），当u v相等时，u代替v所有的操作，
+      |* v的状态变为：挂起，不再加入图中参与后面的图算法，在输出结果时，插入到u的前面。
+      |* 矛盾代表数据在该节点出现无法完整排序的情况
+      */
+    以节点指针储存有向图信息，vector数组存储图邻接表信息，对有向图节点的访问使用哈希表索引进行访问。
+      Tunode* Ceils;//图信息，与邻接链表下标一一对应
+      vector<int> adj[MAXN];//图邻接表
+    对有向图提供了拓扑排序接口，拓扑排序返回返回值是一个枚举类型，为了能够在后续将“挂起”的节点插入到结果中进行输出，拓扑排序的结果保存在链表RES中：
+      list<int> RES;//用于存储拓扑排序结果
+      enum TopState { True, Contra, False };//拓扑排序返回的三种状态，分别代表数据能排序、数据不矛盾但无法排序、数据矛盾
+      enum TopState TopSort();//拓扑排序
+
+                                                        图2.3 有向图结构
+
+3、算法设计与分析
+  (1)算法正确性分析
+    程序中主要使用了拓扑排序算法，我们主要针对拓扑排序算法进行分析
+ 
+    图3.1 拓扑排序算法
+      •初始化：进入拓扑排序后申请辅助空队列q，选出入度为零的有效节点加入队列，使用临时变量count统计加入队列中的节点数， flag标记数据状态， cnt统计存入结果链表的数据数量，将第一个入度为零的节点加入队列和结果链表中。
+      •保持：不断弹出队列的队顶元素，加入到结果链表中，并将其邻接节点加入到队列中，在判断邻接节点时，会使用临接节点的代表节点，如果数据集是正确的，一定会有且仅有一个节点加入到队列中，如果是队列中存在两个以上元素，证明数据集存在无法排序的节点，将flag标记为Contra，标记有数据无法排序。
+    •终止：当队列为空时，程序终止，根据存入结果链表的节点数量和flag的状态判断拓扑排序返回值，数据集按出队顺序排列即为数据集的拓扑排序结果，依次存储在RES结果链表中，遍历RES结果链表即为最终答案，因此算法正确。
+  (2)复杂度分析
+      •时间复杂度：程序中各算法时间复杂度如图所示：
+ 
+                                                          图3.2 各函数时间复杂度
+    拓扑排序中e为有向图中边的数量，整体的时间复杂度为O(n )，若设计算机单次运行时间为1e-9s,此程序的性能趋势图如下：
+ 
+                                                          图3.3 程序性能趋势图
+
+      •空间复杂度：
+      程序中除邻接表使用vector数组造成了O(n ²)的空间复杂度外，其余都是O(n)。
+      •不同数据结构的性能差异：
+      我们可以在程序中取消哈希表索引而采用直接存储姓名，这样可以节省一定的空间，但是代价是每次使用姓名时都会在姓名数组中查找并返回所在位置，每次索引都将耗费O(n)的时间，得不偿失。
+
+四、实验代码
+
+#include <iostream>
+#include <algorithm>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <queue>
+#include <list>
+#include "Interface.h"
+using namespace std;
+
+const int MAXN = 100;//最大存储空间
+int ResCnt;//最终加入图中参与图算法数据的数量
+enum State { Hang, Using, DataContra };
+/* 节点属性里增加的一个状态：（挂起、使用中, 矛盾），当u v相等时，u代替v所有的操作，
+|* v的状态变为：挂起，不再加入图中参与后面的图算法，在输出结果时，插入到u的前面。
+|* 矛盾代表数据在该节点出现无法完整排序的情况
+*/
+struct Tunode {
+    string name;//节点数据
+    int indegree;//入度
+    int outdegree;//出度
+    enum State state;
+};
+int ufs[MAXN];//并查集，当u v排名相等时，将u v作为一个集合，所有对v的操作转移到对u进行操作，即使ufs[v] = u
+Tunode* Ceils;//图信息，与邻接链表下标一一对应
+vector<int> adj[MAXN];//图邻接表
+
+/***********************    TXT文件读取    ************************/
+vector<string> fileMsg;//用于存储读取的文件信息
+void Read_File(string filename);//读取文件内容到fileMsg
+
+/***********************    拓扑排序    ************************/
+list<int> RES;//用于存储拓扑排序结果
+enum TopState { True, Contra, False };//拓扑排序返回的三种状态，分别代表数据能排序、数据不矛盾但无法排序、数据矛盾
+enum TopState TopSort();//拓扑排序
+
+/***********************    哈希表    ************************/
+enum EntryType { Legitimate, Empty, Deleted };//用于哈希索引的节点的状态 已存、空、已删除
+struct HashNode {//哈希表数据节点
+    string name;
+    enum EntryType Info;//用于哈希索引的状态值
+};
+struct HashTable {//哈希表
+    int TableSize = 0;//已经存入的数据大小
+    struct HashNode* Cells; /* 存放节点的数组 */
+};
+int hash_func(string name);//哈希函数，返回应插入下标,以姓名的ASCII码总和作为哈希索引
+int hash_insert(HashTable& tab, string name); //哈希表插入，采用线性探测,返回插入位置的下标
+int hash_find(HashTable& tab, string name);//哈希查找，返回查找元素下标
+HashTable tab;//哈希表
+
+/***********************    并查集    ************************
+|*ufs_find: 并查集路径压缩查找，返回x所在集合的代表节点*/
+int ufs_find(int x) {
+    if (x == ufs[x])
+        return x;
+    else {
+        ufs[x] = ufs_find(ufs[x]);  //父节点设为根节点
+        return ufs[x];//返回父节点
+    }
+}
+inline void merge(int u, int v) {//并查集，合并，将 v 合并到 u, 简单来说，即ufs[v] = u, 这样在使用ufs[v]时，得到的是u
+    ufs[ufs_find(v)] = ufs_find(u);
+}
+
+/***********************    过程封装函数    ************************/
+void __Init__();//初始化全局变量， 读取TXT文件
+void Read_Msg_equal();//读出排名相等的条目，进行并查集合并
+void Read_Msg_unequal();//读出大小条目，构造图邻接表
+void PrintRes(enum TopState res);//根据拓扑排序的状态返回值输出结果
+void __Free__();//释放内存
+
+int main() {
+    setTitle("排名估计");//设置控制台标题
+    while (1) {//循环读入,非法输入退出
+        /***            一、初始化全局变量， 读取TXT文件          ***/
+        __Init__();
+
+        /***            二、解析fileMsg，构图           ***
+        |*解析读出来的fileMsg，将姓名存入哈希表便于索引，利用哈希表的索引构建图邻接表
+        |*使用索引时，会判断节点有没有代表节点，
+        |*    1.先读出排名相等的条目，进行并查集合并    */
+        Read_Msg_equal();
+        /**    2.读出大小条目，构造图邻接表    */
+        Read_Msg_unequal();
+
+        /***            三、对图进行拓扑排序           ***/
+        for (int i = 0; i < MAXN; i++) {
+            if (Ceils[i].name != "-1" && Ceils[i].state != Hang) {//统计有效数据数量
+                ResCnt++;
+            }
+        }
+        enum TopState res = TopSort();//拓扑排序，得到排序结果状态返回值
+
+        /***            四、输出结果           ***/
+        PrintRes(res);//根据拓扑排序的状态返回值输出结果
+        __Free__();//释放内存
+    }
+    return 0;
+}
+void __Init__() {//初始化函数
+    system("cls");//清屏
+    mainFrame();//主要界面框架
+    ResCnt = 0;
+    tab.Cells = new HashNode[MAXN];
+    Ceils = new Tunode[MAXN];
+    for (int i = 0; i < MAXN; i++) {
+        ufs[i] = i;//并查集初始化，所有节点"各自为战"
+        Ceils[i].state = Using; Ceils[i].name = "-1"; Ceils[i].indegree = 0; Ceils[i].outdegree = 0;
+        tab.Cells[i].Info = Empty;
+    }
+    string file[4] = { "可以完整排序样例1(无排名相等).txt", "可以完整排序样例2(有排名相等) .txt",
+                       "数据不矛盾但无法完整排序.txt",      "数据有矛盾无法排序.txt" };
+    setPos(LEFTOTHER + 25, TOPOTHER + 7);
+    cout << "当前可选择四个初始化样例:";
+    for (int i = 1; i <= 4; i++) {
+        setPos(LEFTOTHER + 25, TOPOTHER + 7 + i * 3);
+        cout << i << ". " << file[i - 1];
+    }
+    string tip = "请选择读入的文件:";
+    setPos((WIDTH - tip.size()) / 2 + LEFTOTHER - 1, HIGHT + TOPOTHER - 2);
+    cout << tip;
+    
+    int choise;
+    cin >> choise;
+    if (choise < 1 || choise > 4) {
+        system("cls");//清屏
+        tip = "非法输入！程序退出";
+        setPos((WIDTH - tip.size()) / 2 + LEFTOTHER, TOPOTHER + 10);//居中打印
+        cout << tip;
+        mainFrame();
+        exit(-1);
+    }
+    Read_File(file[choise - 1]);
+}
+void Read_Msg_equal() {//读出排名相等的条目，进行并查集合并
+    for (int i = 0; i < fileMsg.size(); i++) {//先读出排名相等的条目，进行并查集合并
+        int pos;
+        if ((pos = fileMsg[i].find("-", 0)) != -1) {//数据集中a-b代表ab排名相等
+            /*    根据符号分割，将姓名分割出来储存到临时变量u v中   **/
+
+            string u = fileMsg[i].substr(0, pos);
+            string v = fileMsg[i].substr(pos + 1, fileMsg[i].size());
+            //查找哈希表中是否名字已经存在
+            int u_index = hash_find(tab, u);//u, v 在哈希表中的索引
+            int v_index = hash_find(tab, v);
+            if (u_index == -1) {//姓名不存在,将姓名插入哈希表，更新下标
+                u_index = hash_insert(tab, u);
+                Ceils[u_index].name = u;
+
+            }
+            if (v_index == -1) {//姓名不存在,将姓名插入哈希表，更新下标
+                v_index = hash_insert(tab, v);
+                Ceils[v_index].name = v;
+            }
+            /*并查集，将u设为v的代表节点**/
+            merge(u_index, v_index);
+            Ceils[v_index].state = Hang;//v的状态变更为挂起，将不再参与后续的构图
+            //cout << Ceils[u_index].name << " = " << Ceils[v_index].name << " /*v的代表 " << Ceils[ufs_find(v_index)].name << endl;
+        }
+    }
+}
+void Read_Msg_unequal(){//读出大小条目，构造图邻接表
+    for (int i = 0; i < fileMsg.size(); i++) {
+        int pos;
+        if ((pos = fileMsg[i].find(">", 0)) != -1) {
+            /*    根据符号分割，将姓名分割出来储存到临时变量u v中   **/
+            string u = fileMsg[i].substr(0, pos);
+            string v = fileMsg[i].substr(pos + 1, fileMsg[i].size());
+
+            //查找哈希表中是否名字已经存在
+            int u_index = hash_find(tab, u);//u, v 在哈希表中的索引
+            int v_index = hash_find(tab, v);
+            if (u_index == -1) {//姓名不存在,将姓名插入哈希表，更新下标
+                u_index = hash_insert(tab, u);
+                Ceils[u_index].name = u;
+            }
+            if (v_index == -1) {//姓名不存在,将姓名插入哈希表，更新下标
+                v_index = hash_insert(tab, v);
+                Ceils[v_index].name = v;
+            }
+            adj[ufs_find(u_index)].push_back(ufs_find(v_index)); //u > v 即u 指向v
+            Ceils[ufs_find(u_index)].outdegree++;
+            Ceils[ufs_find(v_index)].indegree++;
+            //cout << Ceils[u_index].name << " > " << Ceils[v_index].name << " /*图由 " << Ceils[ufs_find(u_index)].name << " 指向 "<< Ceils[ufs_find(v_index)].name << endl;
+        }
+        else if ((pos = fileMsg[i].find("<", 0)) != -1) {
+            /*    根据符号分割，将姓名分割出来储存到临时变量u v中   **/
+            string u = fileMsg[i].substr(0, pos);
+            string v = fileMsg[i].substr(pos + 1, fileMsg[i].size());
+
+            //查找哈希表中是否名字已经存在
+            int u_index = hash_find(tab, u);//u, v 在哈希表中的索引
+            int v_index = hash_find(tab, v);
+            if (u_index == -1) {//姓名不存在,将姓名插入哈希表，更新下标
+                u_index = hash_insert(tab, u);
+                Ceils[u_index].name = u;
+            }
+            if (v_index == -1) {//姓名不存在,将姓名插入哈希表，更新下标
+                v_index = hash_insert(tab, v);
+                Ceils[v_index].name = v;
+            }
+            adj[ufs_find(v_index)].push_back(ufs_find(u_index)); //u < v 即v 指向 u
+            Ceils[ufs_find(u_index)].indegree++;
+            Ceils[ufs_find(v_index)].outdegree++;
+            //cout << Ceils[u_index].name << " < " << Ceils[v_index].name << " /*图由 " << Ceils[ufs_find(v_index)].name << " 指向 "<< Ceils[ufs_find(u_index)].name << endl;
+        }
+    }
+}
+void __Free__() {//释放内存
+    for (int i = 0; i < MAXN; i++) adj[i].clear();//清空图邻接表
+    fileMsg.clear();//清空Msg中的元素
+    RES.clear();//清空结果数组
+    ResCnt = 0;
+    delete [] tab.Cells;
+    delete [] Ceils;
+}
+void Read_File(string filename) {
+    fstream input(filename, ios::in);//c++文件输入流读取文件，ios::in 以读方式打开
+    if (!input) {//如果没有找到文件，程序终止
+        cout << "没有找到文件！" << endl;
+        exit(-1);
+    }
+    string msg;
+    while (getline(input, msg)) {//逐行取存
+        fileMsg.push_back(msg);//存入fileMsg
+    }
+    input.clear();
+}
+enum TopState TopSort() {
+    queue<int> q;//用于拓扑排序的辅助队列
+    int count = 0;//入度为零的节点数，超过2个代表无法排序
+    enum TopState flag = True;//标记数据
+    int cnt = 0;//结果存储下标
+    for (int i = 0; i < MAXN; i++) {
+        if (Ceils[i].name != "-1" && Ceils[i].state != Hang && Ceils[i].indegree == 0) {//节点有效并且入度为0
+            q.push(i);//加入队列
+            count++;
+        }
+    }
+    if (count >= 2) flag = Contra;
+    while (!q.empty()) {
+        int t = q.front();
+        q.pop();
+        count--;
+        RES.push_back(t);
+        cnt++;
+        for (int i = 0; i < adj[t].size(); i++) {//寻找新的入度为0的节点，这个节点必然在上一个入度为零节点的邻接表中
+            int next = ufs_find(adj[t][i]);
+            Ceils[next].indegree--;
+            if (Ceils[next].indegree == 0) {
+                count++;
+                q.push(next);
+            }
+        }
+        if (count >= 2) {
+            flag = Contra;
+            Ceils[t].state = DataContra;
+        }
+    }
+    if (cnt == ResCnt && flag == True)
+        return True;
+    else if (cnt == ResCnt && flag == Contra)
+        return Contra;
+    else
+        return False;
+}
+void PrintRes(enum TopState res) {//输出结果
+    system("cls");
+    mainFrame();
+    if (res == True) {
+        string re = "数据可以完整排序, 排序结果为:";
+        setPos((WIDTH - re.size()) / 2 + LEFTOTHER, TOPOTHER + 10);//居中打印
+        cout << re << endl;
+        for (int i = 0; i < MAXN; i++) {//将"挂起"的节点插入到输出结果列表中，插入位置为其代表节点后方
+            if (Ceils[i].name != "-1" && Ceils[i].state == Hang) {
+                RES.insert(find(RES.begin(), RES.end(), ufs_find(i)), i);
+            }
+        }
+        re = "";
+        setPos(LEFTOTHER + 14, TOPOTHER + 13);
+        for (list<int>::iterator lt = RES.begin(); lt != RES.end(); lt++) {
+            if (ufs[*lt] != *lt) {
+                re += Ceils[*lt].name[0];
+                re += "=";
+            }
+            else {
+                re += Ceils[*lt].name[0];
+                re += "->";
+            }  
+        }
+        cout << re.substr(0, re.size() - 2);//-2去掉最后一个箭头
+        string tip = "按任意键继续...";
+        setPos((WIDTH - tip.size()) / 2 + LEFTOTHER - 1, HIGHT + TOPOTHER - 2);
+        system("pause");
+    }
+    else if (res == Contra) {
+        string re = "数据不矛盾但无法完整排序: ";
+        setPos((WIDTH - re.size()) / 2 + LEFTOTHER, TOPOTHER + 10);//居中打印
+        cout << re;
+        re = "数据在 ";
+        for (list<int>::iterator lt = RES.begin(); lt != RES.end(); lt++) {
+            if (Ceils[*lt].state == DataContra) {
+                re += Ceils[*lt].name[0];
+                re += " ";
+            }
+        }
+        re += "后方出现无法排序的情况";
+        setPos((WIDTH - re.size()) / 2 + LEFTOTHER, TOPOTHER + 13);
+        cout << re;
+        string tip = "按任意键继续...";
+        setPos((WIDTH - tip.size()) / 2 + LEFTOTHER - 1, HIGHT + TOPOTHER - 2);
+        system("pause");
+    }
+    else {
+        string re = "数据矛盾无法排序: ";
+        setPos((WIDTH - re.size()) / 2 + LEFTOTHER, TOPOTHER + 10);//居中打印
+        cout << re;
+        re = "数据在 ";
+        re += Ceils[RES.back()].name[0];
+        re += " 后方出现数据矛盾";
+        setPos((WIDTH - re.size()) / 2 + LEFTOTHER, TOPOTHER + 13);
+        cout << re;
+        string tip = "按任意键继续...";
+        setPos((WIDTH - tip.size()) / 2 + LEFTOTHER - 1, HIGHT + TOPOTHER - 2);
+        system("pause");
+    }
+    
+}
+int hash_func(string name) {//哈希函数，返回应插入下标,以姓名的ASCII码总和作为哈希索引
+    int char_ascii_sum = 0;
+    for (int i = 0; i < name.size(); i++) {
+        char_ascii_sum += (int)name[i];//累加ASCII码
+    }
+    return char_ascii_sum % MAXN;
+}
+int hash_insert(HashTable& tab, string name) {//哈希表插入，采用线性探测,返回插入位置的下标
+    int index = hash_func(name);
+    while (tab.Cells[index].Info != Empty) {
+        index++;
+        if (index == MAXN) index = 0;
+    }
+    tab.Cells[index].name = name;
+    tab.Cells[index].Info = Legitimate;
+    tab.TableSize++;
+    return index;
+}
+int hash_find(HashTable& tab, string name) {
+    int index = hash_func(name);
+    while (tab.Cells[index].Info == Legitimate) {
+        if (tab.Cells[index].name == name) {
+            return index;
+        }
+        index++;
+        if (index == MAXN) index = 0;
+    }
+    return -1;
+}
+
+
